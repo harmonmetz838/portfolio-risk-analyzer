@@ -95,18 +95,23 @@ app.py                      Streamlit user interface
 portfolio/metrics.py        Return and risk calculations (pure functions)
 portfolio/data.py           Yahoo Finance, FRED, Finnhub, sample data loading
 scripts/make_sample_data.py Generates the synthetic offline dataset
+scripts/verify_metrics.py   Independent cross-check of the metrics against live data
 data/sample_prices.csv      Synthetic dataset
 tests/                      Unit tests and headless app tests
+AI_LOG.md                   Log of AI coding agent prompts, changes and verification
 ```
 
 ## How the AI coding agent was used
 
-<!-- Fill in honestly: which agent (Claude Code / Codex / Antigravity), the prompts you gave,
-     what you changed or rejected, bugs it helped find, and how you verified the numbers. Example points: -->
-- Initial prompt describing the app, data sources, and required metrics; the agent proposed the module structure (data / metrics / UI).
-- Iterations: …
-- Bugs found and fixed: e.g. the Sharpe ratio of a flat series returned a huge number instead of "n/a" because floating-point noise made the standard deviation slightly above zero; fixed with a tolerance and a unit test.
-- Verification: checked metrics against hand calculations and unit tests; spot-checked …
+The first version of the app was generated in a Claude chat conversation. All later changes were made with **Claude Code** in this repository and are recorded prompt by prompt in [`AI_LOG.md`](AI_LOG.md). Each entry gives the prompt, what changed, the commit, and how the change was verified, and keeps automated checks run by the agent separate from manual checks in the browser.
+
+- **Iterations:**
+  - distinct colors for the portfolio (orange) and the benchmark (gray), and a line-based drawdown chart;
+  - a monthly/quarterly rebalancing option, with unit tests for the calculation;
+  - app tests that run fully offline, with network access blocked so any accidental download fails the test.
+- **Independent verification:** `scripts/verify_metrics.py` downloads SPY, AAPL and MSFT prices directly from Yahoo's chart API (not through `portfolio/`), recomputes total return, annualized volatility and max drawdown in plain Python, and cross-checks SPY against Nasdaq's price history. The formulas in `portfolio/metrics.py` matched exactly.
+- **Bug it caught:** the app silently dropped the last day of a Custom date range, because yfinance treats the end date as exclusive. For Oct 24, 2023 – Oct 22, 2026, SPY's total return showed 89.23% instead of 86.99%. The fix includes the chosen end date; presets still end at yesterday's close, so today's incomplete prices are never used. Tests were added, and a re-run of the script matched to 0.00 bp.
+- **Verification:** the unit and app tests (`python -m pytest`), the cross-check script, and manual checks of the charts and date ranges in the browser.
 
 ## Limitations
 
@@ -114,7 +119,7 @@ tests/                      Unit tests and headless app tests
 - One risk-free rate (the latest 3-month T-bill yield, or a manual value) is applied to the whole period instead of the rate in effect each day.
 - Volatility and the Sharpe ratio assume roughly normal returns and understate tail risk.
 - No taxes, fees or trading costs; dividends are treated as reinvested (adjusted prices).
-- Buy-and-hold only; no periodic rebalancing option.
+- Rebalancing is only monthly or quarterly, back to the starting weights, at the close of the first trading day of each period, and without trading costs.
 - Only dates on which every ticker has a price are used, so a recently listed security shortens the analysis window.
 - Yahoo Finance data comes through an unofficial library and can be temporarily unavailable or incomplete.
 - Risk contribution uses starting weights, not the drifted weights at the end of the period.
