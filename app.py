@@ -75,13 +75,18 @@ source_label = st.sidebar.radio(
 source = "sample" if source_label.startswith("Sample") else "live"
 
 if source == "live":
+    # end dates are inclusive; stop at yesterday because today's prices are incomplete
+    yesterday = date.today() - timedelta(days=1)
     period_label = st.sidebar.selectbox("Lookback period", list(PERIODS) + ["Custom"], index=1)
     if period_label == "Custom":
-        start = st.sidebar.date_input("Start", date.today() - timedelta(days=3 * 365))
-        end = st.sidebar.date_input("End", date.today())
+        start = st.sidebar.date_input("Start", date.today() - timedelta(days=3 * 365),
+                                      max_value=yesterday)
+        end = st.sidebar.date_input("End", yesterday, max_value=yesterday,
+                                    help="Included in the analysis. The latest allowed "
+                                         "is yesterday: today's prices are incomplete.")
     else:
-        end = date.today()
-        start = end - timedelta(days=PERIODS[period_label])
+        start = date.today() - timedelta(days=PERIODS[period_label])
+        end = yesterday
 else:
     start = st.sidebar.date_input("Start", date(2023, 1, 1),
                                   min_value=date(2021, 1, 4), max_value=date(2025, 12, 31))

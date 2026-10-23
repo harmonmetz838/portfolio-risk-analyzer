@@ -14,7 +14,7 @@ so the app can show the message to the user.
 from __future__ import annotations
 
 import io
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -58,12 +58,13 @@ def align_prices(prices: pd.DataFrame, min_rows: int = 30) -> tuple[pd.DataFrame
 
 
 def fetch_prices_yahoo(tickers: list[str], start: date, end: date) -> pd.DataFrame:
-    """Daily adjusted closing prices from Yahoo Finance."""
+    """Daily adjusted closing prices from Yahoo Finance, start and end inclusive."""
     import yfinance as yf  # imported here so sample mode works without it
 
     try:
-        raw = yf.download(tickers, start=start, end=end, auto_adjust=True,
-                          progress=False, threads=True)
+        # yfinance treats `end` as exclusive, so ask for one day more
+        raw = yf.download(tickers, start=start, end=end + timedelta(days=1),
+                          auto_adjust=True, progress=False, threads=True)
     except Exception as exc:  # network errors, rate limits, etc.
         raise DataError(f"Could not reach Yahoo Finance: {exc}") from exc
 
@@ -77,6 +78,7 @@ def fetch_prices_yahoo(tickers: list[str], start: date, end: date) -> pd.DataFra
     if list(close.columns) == ["Close"]:  # single ticker, flat columns
         close.columns = tickers[:1]
     close.index = pd.to_datetime(close.index).tz_localize(None)
+    close = close.loc[pd.Timestamp(start):pd.Timestamp(end)]
     # ensure every requested ticker has a column, even if empty
     close = close.reindex(columns=tickers)
     if close.dropna(how="all").empty:

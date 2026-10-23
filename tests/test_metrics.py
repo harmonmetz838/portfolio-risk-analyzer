@@ -123,3 +123,27 @@ def test_sample_dataset_loads():
     from datetime import date
     df = data.load_sample_prices(["AAPL", "SPY", "FAKE"], date(2023, 1, 1), date(2023, 12, 31))
     assert df["AAPL"].notna().all() and df["FAKE"].isna().all()
+
+
+def test_fetch_prices_yahoo_includes_end_date(monkeypatch):
+    """yfinance's `end` is exclusive; fetch_prices_yahoo must include the end date."""
+    import sys
+    import types
+    from datetime import date
+
+    calls = {}
+
+    def fake_download(tickers, start, end, **kwargs):
+        calls.update(start=start, end=end)
+        # like Yahoo, return every trading day from start up to (not including) end,
+        # plus one extra row after it to check that nothing past `end` slips through
+        idx = pd.bdate_range(start, end)
+        cols = pd.MultiIndex.from_product([["Close"], tickers])
+        return pd.DataFrame(1.0, index=idx, columns=cols)
+
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(download=fake_download))
+    df = data.fetch_prices_yahoo(["AAA", "BBB"], date(2026, 10, 19), date(2026, 10, 22))
+    assert calls == {"start": date(2026, 10, 19), "end": date(2026, 10, 23)}
+    assert df.index[0] == pd.Timestamp("2026-10-19")
+    assert df.index[-1] == pd.Timestamp("2026-10-22")  # end date included, nothing after
+    assert list(df.columns) == ["AAA", "BBB"]
