@@ -42,3 +42,22 @@
 
 - Automated: `.venv/bin/python -m pytest` passed all 19 tests.
 - Manual: I checked it in the browser. Monthly and quarterly both show the rebalanced line next to buy-and-hold, and they stay close as expected.
+
+## 2026-10-23 — App tests run fully offline
+
+**Prompt**
+
+> The app tests try to download live data before switching to sample mode, so they depend on the internet. Make the tests run fully offline, then run them and commit with a log entry.
+
+**Changes** (commit `5018d19`)
+
+- `app.py`: gave the "Price source" radio `key="source"` so tests can choose sample mode before the app's first run. No change for users.
+- `tests/test_app.py`:
+  - `run_sample_app()` sets `session_state["source"]` to sample mode before the first `run()`, instead of running once in live mode and then switching.
+  - New autouse `no_network` fixture: blocks `socket.getaddrinfo` and `socket.socket.connect`, clears `FINNHUB_API_KEY` so live quotes can't load, and fails a test if it tried to use the network.
+
+**Verification**
+
+- Before the fix, a run with network blocked showed the app tests making 4 connection attempts to Yahoo Finance. They passed only because nothing checked the first (live-mode) run.
+- After the fix, `.venv/bin/python -m pytest` passed all 19 tests with network blocked. The 17 yfinance deprecation warnings are gone because yfinance no longer runs.
+- Check that the guard works: temporarily restoring the old live-mode first run made all 4 app tests fail with "app tried to use the network".
