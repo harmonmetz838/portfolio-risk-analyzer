@@ -10,6 +10,7 @@ An interactive Streamlit app that measures the performance and risk of a stock/E
 
 - Enter **3 or more** stocks/ETFs as **dollar amounts or % weights** (editable table; add/remove rows).
 - Choose a lookback period (1, 3, 5 years or custom) and any **benchmark** ticker (default SPY).
+- Choose **buy-and-hold** or **monthly/quarterly rebalancing** back to the target weights; the growth chart shows the rebalanced portfolio alongside buy-and-hold.
 - Calculates **total and annualized return, annualized volatility, Sharpe ratio, maximum drawdown, beta**, and each holding's **contribution to portfolio risk**.
 - Charts:
   1. Growth of the portfolio vs the benchmark
@@ -75,6 +76,7 @@ All calculations are in `portfolio/metrics.py` and use 252 trading days per year
 | Measure | Formula | What it tells you |
 |---|---|---|
 | Portfolio value | Buy-and-hold: buy `amount / price` shares on day 1, never rebalance | How the money actually grew; weights drift with prices |
+| Rebalanced value | At the close of the first trading day of each month/quarter, re-split the total value by the target weights (no trading costs) | Effect of keeping the allocation fixed instead of letting winners grow |
 | Total return | V_end / V_start − 1 | Overall gain or loss |
 | Annualized return (CAGR) | (V_end / V_start)^(252/N) − 1 | Growth rate per year, comparable across periods |
 | Annualized volatility | std(daily returns) × √252 | Typical size of swings; the standard risk measure |

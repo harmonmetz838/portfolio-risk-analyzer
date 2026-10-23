@@ -28,6 +28,42 @@ def test_buy_and_hold_value():
     assert metrics.portfolio_value(prices, amounts).tolist() == [200.0, 300.0]
 
 
+def test_rebalanced_value_monthly_resets_to_target_weights():
+    idx = pd.to_datetime(["2024-01-30", "2024-01-31", "2024-02-01", "2024-02-02"])
+    prices = pd.DataFrame({"A": [10, 20, 20, 40], "B": [10, 10, 10, 10]}, index=idx)
+    amounts = pd.Series({"A": 50.0, "B": 50.0})
+    # Jan 31: A doubles -> 100 + 50 = 150. Feb 1 (new month): rebalance to 75/75.
+    # Feb 2: A doubles again -> 150 + 75 = 225 (buy-and-hold would be 200 + 50 = 250)
+    v = metrics.rebalanced_value(prices, amounts, "monthly")
+    assert v.tolist() == pytest.approx([100.0, 150.0, 150.0, 225.0])
+    assert metrics.portfolio_value(prices, amounts).iloc[-1] == pytest.approx(250.0)
+
+
+def test_rebalanced_value_quarterly_ignores_month_boundaries():
+    idx = pd.to_datetime(["2024-01-31", "2024-02-01", "2024-03-29", "2024-04-01", "2024-04-02"])
+    prices = pd.DataFrame({"A": [10, 20, 20, 20, 40], "B": [10, 10, 10, 10, 10]}, index=idx)
+    amounts = pd.Series({"A": 30.0, "B": 70.0})
+    quarterly = metrics.rebalanced_value(prices, amounts, "quarterly")
+    buy_hold = metrics.portfolio_value(prices, amounts)
+    # no rebalance in February or March, so it matches buy-and-hold until April
+    assert quarterly.iloc[:4].tolist() == pytest.approx(buy_hold.iloc[:4].tolist())
+    # Apr 1: 130 re-split 30/70 -> A 39, B 91; Apr 2: A doubles -> 78 + 91 = 169
+    assert quarterly.iloc[-1] == pytest.approx(169.0)
+
+
+def test_rebalanced_value_equals_buy_and_hold_without_rebalance_dates():
+    prices = pd.DataFrame({"A": [10, 12, 9, 15, 11], "B": [5, 5, 6, 4, 7]}, index=DATES)
+    amounts = pd.Series({"A": 60.0, "B": 40.0})  # DATES are all in January 2024
+    assert metrics.rebalanced_value(prices, amounts, "monthly").tolist() == pytest.approx(
+        metrics.portfolio_value(prices, amounts).tolist())
+
+
+def test_rebalanced_value_rejects_unknown_freq():
+    prices = pd.DataFrame({"A": [10, 11], "B": [5, 5]}, index=DATES[:2])
+    with pytest.raises(ValueError):
+        metrics.rebalanced_value(prices, pd.Series({"A": 1.0, "B": 1.0}), "weekly")
+
+
 def test_max_drawdown():
     v = pd.Series([100, 120, 90, 130, 104], index=DATES)
     # worst fall: 120 -> 90 = -25%  (130 -> 104 is only -20%)

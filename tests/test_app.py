@@ -39,3 +39,11 @@ def test_bad_dates_show_error():
     at.sidebar.date_input[1].set_value(date(2025, 1, 1)).run()
     assert not at.exception
     assert any("start date" in e.value.lower() for e in at.error)
+
+
+def test_rebalancing_option_runs():
+    at = run_sample_app()
+    at.sidebar.radio[1].set_value("Rebalance quarterly").run()
+    assert not at.exception
+    assert not at.error
+    assert len(at.metric) == 5

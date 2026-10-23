@@ -25,6 +25,9 @@ PERIODS = {"1 year": 365, "3 years": 3 * 365, "5 years": 5 * 365}
 PCT_ROWS = ["Total return", "Annualized return", "Annualized volatility", "Max drawdown"]
 PORTFOLIO_COLOR = "#F28C28"  # orange
 BENCHMARK_COLOR = "#8C8C8C"  # gray
+BUY_HOLD_COLOR = "#7A3E00"  # dark orange, buy-and-hold when a rebalanced portfolio is shown
+REBALANCE_OPTIONS = {"Buy and hold (no rebalancing)": None,
+                     "Rebalance monthly": "monthly", "Rebalance quarterly": "quarterly"}
 
 
 # ---------------------------------------------------------------- helpers
@@ -86,6 +89,11 @@ else:
     st.sidebar.caption("Sample tickers: AAPL, MSFT, NVDA, JNJ, XOM, TLT, GLD, SPY")
 
 benchmark = st.sidebar.text_input("Benchmark ticker", "SPY").strip().upper()
+rebalance_label = st.sidebar.radio(
+    "Rebalancing", list(REBALANCE_OPTIONS),
+    help="Rebalancing resets holdings to the target weights at the start of each "
+         "month or quarter. Buy and hold lets weights drift with prices.")
+rebalance = REBALANCE_OPTIONS[rebalance_label]
 
 st.sidebar.header("2. Risk-free rate")
 use_fred = st.sidebar.checkbox("Use latest 3-month T-bill yield (FRED)", value=(source == "live"))
@@ -198,7 +206,9 @@ invest = float(amounts.sum()) if input_mode == "Dollar amounts" else 10_000.0
 dollars = weights * invest
 
 port_prices = prices[valid]
-port_val = metrics.portfolio_value(port_prices, dollars)
+buy_hold_val = metrics.portfolio_value(port_prices, dollars)
+port_val = (metrics.rebalanced_value(port_prices, dollars, rebalance) if rebalance
+            else buy_hold_val)
 bench_val = prices[benchmark] / prices[benchmark].iloc[0] * invest
 asset_rets = metrics.daily_returns(port_prices)
 
@@ -225,7 +235,7 @@ if finnhub_key:
 # ---------------------------------------------------------------- KPIs
 st.subheader(f"Results: {prices.index[0]:%b %d, %Y} – {prices.index[-1]:%b %d, %Y}")
 st.caption(f"{len(prices)} trading days · risk-free rate: {rf_note} · "
-           f"buy-and-hold (no rebalancing) · ${invest:,.0f} invested")
+           f"{rebalance_label.lower()} · ${invest:,.0f} invested")
 
 k = st.columns(5)
 for col, name in zip(k, ["Annualized return", "Annualized volatility", "Sharpe ratio",
@@ -241,12 +251,19 @@ for col, name in zip(k, ["Annualized return", "Annualized volatility", "Sharpe r
 
 # ---------------------------------------------------------------- charts row 1
 series_colors = {"Portfolio": PORTFOLIO_COLOR, benchmark: BENCHMARK_COLOR}
+port_label = f"Portfolio ({rebalance} rebalancing)" if rebalance else "Portfolio"
 left, right = st.columns(2)
 with left:
     st.markdown("**Growth of the portfolio vs benchmark**")
-    growth = pd.DataFrame({"Portfolio": port_val, benchmark: bench_val})
-    fig = px.line(growth, labels={"value": "Value ($)", "index": "", "variable": ""},
-                  color_discrete_map=series_colors)
+    growth = {port_label: port_val}
+    if rebalance:
+        growth["Portfolio (buy and hold)"] = buy_hold_val
+    growth[benchmark] = bench_val
+    fig = px.line(pd.DataFrame(growth),
+                  labels={"value": "Value ($)", "index": "", "variable": ""},
+                  color_discrete_map={port_label: PORTFOLIO_COLOR, benchmark: BENCHMARK_COLOR,
+                                      "Portfolio (buy and hold)": BUY_HOLD_COLOR})
+    fig.update_traces(line_dash="dash", selector=dict(name="Portfolio (buy and hold)"))
     fig.update_layout(height=380, legend=dict(orientation="h", y=1.08), margin=dict(t=30))
     st.plotly_chart(fig, width="stretch")
 with right:
@@ -263,7 +280,8 @@ with right:
 left, right = st.columns(2)
 with left:
     st.markdown("**Allocation: starting weight vs share of risk**")
-    alloc = pd.DataFrame({"Starting weight": weights, "Ending weight": end_weights,
+    end_label = "Ending weight (buy and hold)" if rebalance else "Ending weight"
+    alloc = pd.DataFrame({"Starting weight": weights, end_label: end_weights,
                           "Share of portfolio risk": risk_contrib}).reset_index(names="Ticker")
     long = alloc.melt(id_vars="Ticker", var_name="Measure", value_name="Share")
     fig = px.bar(long, x="Ticker", y="Share", color="Measure", barmode="group")
@@ -335,7 +353,9 @@ with st.expander("Methodology, data sources and limitations"):
 - Latest quotes (optional): Finnhub `/quote` endpoint.
 
 **Calculations** (252 trading days per year)
-- Portfolio value: buy-and-hold; shares bought on day 1 and never rebalanced.
+- Portfolio value: buy-and-hold (shares bought on day 1 and never rebalanced), or
+  rebalanced back to the starting weights at the close of the first trading day of
+  each month/quarter, with no trading costs.
 - Annualized return: (V_end / V_start)^(252 / N) − 1.
 - Annualized volatility: standard deviation of daily returns × √252.
 - Sharpe ratio: mean daily excess return / std of daily excess return × √252.

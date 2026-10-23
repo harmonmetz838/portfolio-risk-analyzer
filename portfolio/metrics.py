@@ -42,6 +42,33 @@ def portfolio_value(prices: pd.DataFrame, amounts: pd.Series) -> pd.Series:
     return (prices * shares).sum(axis=1)
 
 
+REBALANCE_FREQS = {"monthly": "M", "quarterly": "Q"}
+
+
+def rebalanced_value(prices: pd.DataFrame, amounts: pd.Series, freq: str) -> pd.Series:
+    """Portfolio value when rebalanced back to the starting weights.
+
+    freq is "monthly" or "quarterly". Rebalancing happens at the close of the
+    first trading day of each new month/quarter: the whole portfolio value is
+    re-split by the target weights amount_i / sum(amounts). No trading costs.
+    """
+    if freq not in REBALANCE_FREQS:
+        raise ValueError(f"freq must be one of {list(REBALANCE_FREQS)}.")
+    prices = prices[amounts.index]
+    p = prices.to_numpy(dtype=float)
+    target = (amounts / amounts.sum()).to_numpy(dtype=float)
+    periods = prices.index.to_period(REBALANCE_FREQS[freq])
+    new_period = np.r_[False, periods[1:] != periods[:-1]]
+
+    shares = amounts.to_numpy(dtype=float) / p[0]
+    values = np.empty(len(p))
+    for i in range(len(p)):
+        values[i] = p[i] @ shares
+        if new_period[i]:
+            shares = values[i] * target / p[i]
+    return pd.Series(values, index=prices.index)
+
+
 def total_return(values: pd.Series) -> float:
     return float(values.iloc[-1] / values.iloc[0] - 1)
 
