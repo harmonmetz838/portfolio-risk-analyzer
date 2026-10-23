@@ -61,3 +61,38 @@
 - Before the fix, a run with network blocked showed the app tests making 4 connection attempts to Yahoo Finance. They passed only because nothing checked the first (live-mode) run.
 - After the fix, `.venv/bin/python -m pytest` passed all 19 tests with network blocked. The 17 yfinance deprecation warnings are gone because yfinance no longer runs.
 - Check that the guard works: temporarily restoring the old live-mode first run made all 4 app tests fail with "app tried to use the network".
+
+## 2026-10-23 — Independent metric cross-check (automated, run by Claude Code)
+
+**Prompt**
+
+> Independently verify the app's numbers. Without using the app's own functions in portfolio/, write a short standalone script that downloads SPY, AAPL and MSFT adjusted closes for Oct 24, 2023 – Oct 22, 2026 and computes, from scratch, each ticker's total return, annualized volatility and max drawdown. If possible, cross-check SPY's prices against a second source (e.g. Stooq). Compare the results with what portfolio/metrics.py produces and show me a side-by-side table. Explain any differences. Save the script as scripts/verify_metrics.py, add an AI_LOG.md entry saying this was an automated cross-check run by Claude Code, and commit.
+
+**Changes** (commit `9e7aef8`)
+
+- New `scripts/verify_metrics.py` (needs internet; run with `.venv/bin/python scripts/verify_metrics.py`):
+  - Downloads daily prices from Yahoo's chart API with `requests`, not yfinance, and computes the three metrics in plain Python, without `portfolio/`.
+  - Cross-checks SPY against Nasdaq's historical-price API. Stooq was tried first but serves a JavaScript bot check instead of data.
+  - Compares the results with `portfolio/metrics.py` on the same prices, and with the app's own pipeline (`portfolio/data.py` via yfinance, using the same start/end dates a user would enter).
+
+**Verification**
+
+This was an automated cross-check run by Claude Code on 2026-10-23, not a manual check. Results for 2023-10-24 to 2026-10-22 (752 trading days):
+
+| Ticker | Metric | From scratch | metrics.py, same prices | App pipeline |
+|---|---|---:|---:|---:|
+| SPY | Total return | 86.99% | 86.99% | 89.23% |
+| SPY | Annualized volatility | 15.25% | 15.25% | 15.24% |
+| SPY | Max drawdown | -18.76% | -18.76% | -18.76% |
+| AAPL | Total return | 103.49% | 103.49% | 101.02% |
+| AAPL | Annualized volatility | 26.84% | 26.84% | 26.85% |
+| AAPL | Max drawdown | -33.36% | -33.36% | -33.36% |
+| MSFT | Total return | 61.34% | 61.34% | 65.02% |
+| MSFT | Annualized volatility | 26.30% | 26.30% | 26.28% |
+| MSFT | Max drawdown | -34.50% | -34.50% | -34.50% |
+
+- **`metrics.py` formulas:** match the from-scratch numbers exactly (0.0000 bp difference on every metric).
+- **App pipeline:** stops at 2026-10-21 (751 days) because yfinance treats `end` as exclusive, so the end date entered in the sidebar is left out. That one missing day explains every difference in the last column: on the same 751 days, the from-scratch numbers match the app to 0.00 bp. Not fixed yet.
+- **SPY second source (Nasdaq):** same 752 trading days. Unadjusted closes agree to within 1 cent on every day except 2026-04-20 (Yahoo 708.72, Nasdaq 710.14). It isn't known which source is right that day.
+- **Dividend adjustment:** rebuilding SPY's total return from Nasdaq closes plus Yahoo's 12 dividends gives 86.99%, within 0.5 bp of Yahoo's Adj Close. The price-only return is 80.34%, so dividends add about 6.7 points.
+- `.venv/bin/python -m pytest` still passes all 19 tests.
