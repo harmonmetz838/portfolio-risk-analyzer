@@ -34,7 +34,7 @@ An interactive Streamlit app that measures the performance and risk of a stock/E
 Requires Python 3.10+.
 
 ```bash
-git clone https://github.com/<your-username>/portfolio-risk-analyzer.git
+git clone https://github.com/harmonmetz838/portfolio-risk-analyzer.git
 cd portfolio-risk-analyzer
 python -m venv .venv
 # Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
