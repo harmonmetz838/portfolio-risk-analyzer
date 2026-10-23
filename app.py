@@ -23,6 +23,8 @@ DEFAULT_HOLDINGS = pd.DataFrame(
 )
 PERIODS = {"1 year": 365, "3 years": 3 * 365, "5 years": 5 * 365}
 PCT_ROWS = ["Total return", "Annualized return", "Annualized volatility", "Max drawdown"]
+PORTFOLIO_COLOR = "#F28C28"  # orange
+BENCHMARK_COLOR = "#8C8C8C"  # gray
 
 
 # ---------------------------------------------------------------- helpers
@@ -238,19 +240,21 @@ for col, name in zip(k, ["Annualized return", "Annualized volatility", "Sharpe r
                delta_color="inverse" if name == "Annualized volatility" else "normal")
 
 # ---------------------------------------------------------------- charts row 1
+series_colors = {"Portfolio": PORTFOLIO_COLOR, benchmark: BENCHMARK_COLOR}
 left, right = st.columns(2)
 with left:
     st.markdown("**Growth of the portfolio vs benchmark**")
     growth = pd.DataFrame({"Portfolio": port_val, benchmark: bench_val})
-    fig = px.line(growth, labels={"value": "Value ($)", "index": "", "variable": ""})
+    fig = px.line(growth, labels={"value": "Value ($)", "index": "", "variable": ""},
+                  color_discrete_map=series_colors)
     fig.update_layout(height=380, legend=dict(orientation="h", y=1.08), margin=dict(t=30))
     st.plotly_chart(fig, width="stretch")
 with right:
     st.markdown("**Drawdown (decline from previous peak)**")
     dd = pd.DataFrame({"Portfolio": metrics.drawdown_series(port_val),
                        benchmark: metrics.drawdown_series(bench_val)})
-    fig = px.area(dd, labels={"value": "Drawdown", "index": "", "variable": ""})
-    fig.update_traces(stackgroup=None, fill="tozeroy")
+    fig = px.line(dd, labels={"value": "Drawdown", "index": "", "variable": ""},
+                  color_discrete_map=series_colors)
     fig.update_layout(height=380, yaxis_tickformat=".0%",
                       legend=dict(orientation="h", y=1.08), margin=dict(t=30))
     st.plotly_chart(fig, width="stretch")
