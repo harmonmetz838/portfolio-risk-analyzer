@@ -68,6 +68,7 @@ st.sidebar.header("1. Data")
 source_label = st.sidebar.radio(
     "Price source",
     ["Live (Yahoo Finance)", "Sample data (synthetic, offline)"],
+    key="source",
     help="Sample data is simulated and is NOT real market data. Use it only "
          "if you have no internet connection.",
 )

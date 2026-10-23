@@ -1,19 +1,39 @@
 """Smoke tests: run the Streamlit app headlessly in offline sample mode.
 
+Network access is blocked for every test here, so they pass without internet
+and fail if the app tries to download anything in sample mode.
+
 Run:  python -m pytest
 """
 
+import socket
 from pathlib import Path
 
+import pytest
 from streamlit.testing.v1 import AppTest
 
 APP = str(Path(__file__).resolve().parent.parent / "app.py")
 
 
+@pytest.fixture(autouse=True)
+def no_network(monkeypatch):
+    attempts = []
+
+    def blocked(*args, **kwargs):
+        attempts.append(args)
+        raise OSError("network access is blocked in tests")
+
+    monkeypatch.setattr(socket, "getaddrinfo", blocked)
+    monkeypatch.setattr(socket.socket, "connect", blocked)
+    monkeypatch.delenv("FINNHUB_API_KEY", raising=False)  # no live quotes
+    yield
+    assert not attempts, f"app tried to use the network: {attempts[:3]}"
+
+
 def run_sample_app():
     at = AppTest.from_file(APP, default_timeout=60)
+    at.session_state["source"] = "Sample data (synthetic, offline)"  # before the first run
     at.run()
-    at.sidebar.radio[0].set_value("Sample data (synthetic, offline)").run()
     return at
 
 
