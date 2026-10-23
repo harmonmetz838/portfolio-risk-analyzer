@@ -96,3 +96,26 @@ This was an automated cross-check run by Claude Code on 2026-10-23, not a manual
 - **SPY second source (Nasdaq):** same 752 trading days. Unadjusted closes agree to within 1 cent on every day except 2026-04-20 (Yahoo 708.72, Nasdaq 710.14). It isn't known which source is right that day.
 - **Dividend adjustment:** rebuilding SPY's total return from Nasdaq closes plus Yahoo's 12 dividends gives 86.99%, within 0.5 bp of Yahoo's Adj Close. The price-only return is 80.34%, so dividends add about 6.7 points.
 - `.venv/bin/python -m pytest` still passes all 19 tests.
+
+## 2026-10-23 — Fix: include the chosen end date in live downloads
+
+**Prompt**
+
+> Yes, fix it. Note: the preset periods use today as the end date and already include yesterday, so make sure the fix includes the chosen end date for Custom ranges without breaking the presets (e.g. today's incomplete data). Add a test, re-run verify_metrics.py to confirm the app now matches, update AI_LOG.md, and commit.
+
+**Changes** (commit `a0c3aa7`)
+
+- `portfolio/data.py`: `fetch_prices_yahoo` now treats `start` and `end` as inclusive. It asks yfinance for `end + 1 day` (yfinance's `end` is exclusive) and trims any rows after `end`.
+- `app.py`:
+  - **Presets:** the end date is now yesterday instead of today (exclusive), and the start is still counted back from today. They load exactly the same days as before and never include today's incomplete prices.
+  - **Custom:** the End date defaults to yesterday and can't be later than yesterday, for the same reason. The chosen End date is now included in the analysis.
+- Tests:
+  - `tests/test_metrics.py`: a unit test with a stand-in for yfinance. It checks that `end + 1 day` is requested, the end date is included, and nothing after it is returned.
+  - `tests/test_app.py`: two offline app tests with the downloads replaced by fakes. One checks that the default 3-year preset requests today − 1095 days through yesterday. The other checks that a Custom range requests exactly the chosen start and end dates, and that the End date defaults to and is capped at yesterday.
+
+**Verification** (automated, run by Claude Code)
+
+- `.venv/bin/python -m pytest`: all 22 tests passed. Removing the extra day from `fetch_prices_yahoo` made the new unit test fail.
+- `scripts/verify_metrics.py` re-run: the app's pipeline now covers 2023-10-24 to 2026-10-22 (752 days, previously 751). It matches the from-scratch numbers to 0.00 bp on every metric for SPY, AAPL and MSFT (SPY total return 86.99%, previously 89.23%).
+- Live call with the 3-year preset's dates on 2026-10-23: data from 2023-10-24 to 2026-10-22 (752 rows), so it ends yesterday and excludes today, the same days as before the fix.
+- Not checked in a browser.
